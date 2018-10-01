@@ -136,7 +136,14 @@ int main(int argc, char **argv) {
 
     char *time = format_time_s(cfg.duration);
     printf("Running %s test @ %s\n", time, url);
+
+
+    char* current_time = get_current_time(); 
+    char* file_name = concat_char(current_time, " - Result.txt");
+    FILE *f = fopen(file_name, "w");
+    
     printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    fprintf(f, "  %"PRIu64" threads and %"PRIu64" connections in %"PRIu64" seconds\n", cfg.threads, cfg.connections, cfg.duration);
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -169,26 +176,34 @@ int main(int argc, char **argv) {
         int64_t interval = runtime_us / (complete / cfg.connections);
         stats_correct(statistics.latency, interval);
     }
-
-    print_stats_header();
-    print_stats("Latency", statistics.latency, format_time_us);
-    print_stats("Req/Sec", statistics.requests, format_metric);
-    if (cfg.latency) print_stats_latency(statistics.latency);
+    print_stats_header(f);
+    print_stats(f, "Latency", statistics.latency, format_time_us);
+    print_stats(f, "Req/Sec", statistics.requests, format_metric);
+    if (cfg.latency) print_stats_latency(f, statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
 
     printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    fprintf(f, "  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
+               errors.connect, errors.read, errors.write, errors.timeout);
+        fprintf(f, "  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
     }
 
     if (errors.status) {
         printf("  Non-2xx or 3xx responses: %d\n", errors.status);
+        fprintf(f, "  Non-2xx or 3xx responses: %d\n", errors.status);
     }
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+
+    fprintf(f, "Requests/sec: %9.2Lf\n", req_per_s);
+    fprintf(f, "Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+
+    fclose(f);
 
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
@@ -543,11 +558,12 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     return 0;
 }
 
-static void print_stats_header() {
+static void print_stats_header(FILE* f) {
+    fprintf(f, "  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
     printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
 }
 
-static void print_units(long double n, char *(*fmt)(long double), int width) {
+static void print_units(long double n, char *(*fmt)(long double), int width, FILE* f) {
     char *msg = fmt(n);
     int len = strlen(msg), pad = 2;
 
@@ -556,30 +572,53 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
     width -= pad;
 
     printf("%*.*s%.*s", width, width, msg, pad, "  ");
+    fprintf(f, "%*.*s%.*s", width, width, msg, pad, "  ");
 
     free(msg);
 }
 
-static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
+static void print_stats(FILE* f, char *name, stats *stats, char *(*fmt)(long double)) {
     uint64_t max = stats->max;
     long double mean  = stats_mean(stats);
     long double stdev = stats_stdev(stats, mean);
 
     printf("    %-10s", name);
-    print_units(mean,  fmt, 8);
-    print_units(stdev, fmt, 10);
-    print_units(max,   fmt, 9);
+    fprintf(f, "    %-10s", name);
+    print_units(mean,  fmt, 8, f);
+    print_units(stdev, fmt, 10, f);
+    print_units(max,   fmt, 9, f);
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+    fprintf(f, "%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
 
-static void print_stats_latency(stats *stats) {
+static void print_stats_latency(FILE* f, stats *stats) {
     long double percentiles[] = { 50.0, 75.0, 90.0, 99.0 };
     printf("  Latency Distribution\n");
     for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
         long double p = percentiles[i];
         uint64_t n = stats_percentile(stats, p);
         printf("%7.0Lf%%", p);
-        print_units(n, format_time_us, 10);
+        print_units(n, format_time_us, 10, f);
         printf("\n");
+
+        fprintf(f, "%7.0Lf%%", p);
+        fprintf(f, "\n");
     }
+}
+
+char* get_current_time(){
+    time_t mytime = time(NULL);
+    char * time_str = ctime(&mytime);
+    time_str[strlen(time_str)-1] = '\0';
+    printf("Current Time : %s\n", time_str);
+
+    return time_str;
+}
+
+char* concat_char(char* ch_0, char* ch_1){
+    char* name_with_extension;
+    name_with_extension = malloc(strlen(ch_0)+1+strlen(ch_1)); /* make space for the new string (should check the return value ...) */
+    strcpy(name_with_extension, ch_0); /* copy name into the new var */
+    strcat(name_with_extension, ch_1); /* add the extension */
+    return name_with_extension;
 }

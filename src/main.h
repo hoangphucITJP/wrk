@@ -47,8 +47,10 @@ static uint64_t time_us();
 static int parse_args(struct config *, char **, struct http_parser_url *, char **, int, char **);
 static char *copy_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
 
-static void print_stats_header();
-static void print_stats(char *, stats *, char *(*)(long double));
-static void print_stats_latency(stats *);
+static void print_stats_header(FILE* f);
+static void print_stats(FILE* f, char *, stats *, char *(*)(long double));
+static void print_stats_latency(FILE* f, stats *);
+char* get_current_time();
+char* concat_char(char* ch_0, char* ch_1);
 
 #endif /* MAIN_H */
