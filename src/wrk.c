@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
 
 
     char* current_time = get_current_time(); 
-    char* file_name = concat_char(current_time, " - Result.txt");
+    char* file_name = concat_char("result/", concat_char(current_time, " - Result.txt"));
     FILE *f = fopen(file_name, "w");
     
     printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
